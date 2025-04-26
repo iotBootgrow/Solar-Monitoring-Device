@@ -97,7 +97,7 @@ You must install these libraries from Arduino IDE Library Manager:
 ---
 
 # 📬 Support and Contact
-Developed by **Bootgrow Solutions LLP** for **Takyon Networks Private Limited**.  
+Developed by **Bootgrow Solutions LLP** 
 For technical queries or support, please raise issues in the repository or contact the development team directly.
 
 ---
