@@ -1,5 +1,5 @@
-// Solar Monitoring System v2 - Static OTA + Critical SMS Alerts
-// Features: Sensors + Inverter Full Display, Auto Scrolling LCD, WiFi + 4G fallback, OTA Updates, Critical SMS Alerts
+// Solar Monitoring System Final - Static OTA Version
+// Features: Flash Save, Auto Baud, WiFi + GSM fallback, LCD Scroll, API Push, SMS Alerts, OTA
 
 #include <WiFi.h>
 #include <TinyGsmClient.h>
@@ -8,54 +8,56 @@
 #include <LiquidCrystal_I2C.h>
 #include <HTTPClient.h>
 #include <ArduinoOTA.h>
+#include "InverterSettings.h"
+#include "AutoBaudScanner.h"
+#include "LCDManager.h"
+#include "RS485Reader.h"
 
-// ===== Hardware Pin Definitions =====
+// ====== Hardware Definitions ======
 #define DHTPIN 4
 #define DHTTYPE DHT22
-
 #define WIND_SPEED_PIN 25
 #define DUST_SENSOR_PIN 32
 #define SOLAR_SENSOR_PIN 34
 #define WIND_DIRECTION_PIN 35
-
 #define MODEM_PWRKEY 23
 #define MODEM_TX 27
 #define MODEM_RX 26
 #define MODEM_POWER_ON 5
-
 #define I2C_SDA 21
 #define I2C_SCL 22
 
-// ===== Setup Objects =====
+// ====== Global Objects ======
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 HardwareSerial SerialAT(1);
 TinyGsm modem(SerialAT);
 
-// ===== WiFi + GSM Credentials =====
+// ====== Network Credentials ======
 const char* ssid = "YourWiFi_SSID";
 const char* password = "YourWiFi_PASSWORD";
-const char apn[] = "your_apn"; // SIM Card APN
+const char apn[] = "your_apn"; // GSM APN
 
-// ===== API Endpoints =====
+// ====== API Endpoints ======
 const char* sensorAPI = "https://solar-monitoring-api.onrender.com/api/sensors/send-sensor-data";
 const char* inverterAPI = "https://solar-monitoring-api.onrender.com/api/inverter/send-inverter-data";
 
-// ===== Device Identifiers =====
+// ====== Plant Identifiers ======
 String plant_id = "Lko-Area-1";
 String inverter_id = "Inv-1002";
 String customer_id = "672087f520bc5c71160e7306";
 
-// ===== Data Variables =====
+// ====== Control Variables ======
 unsigned long lastScrollTime = 0;
 int currentPage = 0;
 const int totalPages = 7;
 
-// ===== Inverter Mock Variables (For Now) =====
-String inverterStatus = "Running";
-int batterySOC = 85;
+String inverterStatus = "Running"; // Default for first boot
+int batterySOC = 85; // Battery State of Charge
 
-// ===== Setup =====
+// ====== Detected Settings ======
+int detectedBaudRate = 0;
+int detectedSlaveID = 1;
 void setup() {
   Serial.begin(115200);
   delay(100);
@@ -73,7 +75,7 @@ void setup() {
   lcd.setCursor(0, 2);
   lcd.print("Connecting WiFi...");
   int wifi_attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && wifi_attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && wifi_attempts < 15) {
     delay(500);
     Serial.print(".");
     wifi_attempts++;
@@ -82,26 +84,34 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\nWiFi Connected!");
     lcd.setCursor(0, 2);
-    lcd.print("WiFi Connected   ");
+    lcd.print("WiFi Connected     ");
   } else {
     Serial.println("\nWiFi Failed, trying GSM...");
     lcd.setCursor(0, 2);
-    lcd.print("WiFi Failed, GSM..");
+    lcd.print("WiFi Failed, GSM...");
     connectGSM();
   }
+
+  loadSettings(); // Load baud rate and slave ID from Flash
+
+  if (detectedBaudRate == 0) { // No settings saved previously
+    detectedBaudRate = autoBaudDetect();
+    saveSettings(detectedBaudRate, detectedSlaveID);
+  }
+
+  SerialAT.begin(detectedBaudRate, SERIAL_8N1, MODEM_RX, MODEM_TX);
 
   ArduinoOTA.setHostname("SolarMonitor-Device-001");
   ArduinoOTA.setPassword("solar@123");
   ArduinoOTA.begin();
 }
-
-// ===== Main Loop =====
 void loop() {
   ArduinoOTA.handle();
 
   static unsigned long lastDataSent = 0;
   if (millis() - lastDataSent > 30000) { // Send every 30 sec
     lastDataSent = millis();
+    
     float temperature = dht.readTemperature();
     float humidity = dht.readHumidity();
     int dust = analogRead(DUST_SENSOR_PIN);
@@ -110,18 +120,17 @@ void loop() {
     unsigned long windSpeed = pulseIn(WIND_SPEED_PIN, HIGH);
 
     sendSensorData(temperature, humidity, dust, solarRadiation, windSpeed, windDir);
-    sendInverterData(); // Mock inverter data sending
+    sendInverterData(); // Framework placeholder (RS485 reading)
     checkCriticalAlerts();
   }
 
-  if (millis() - lastScrollTime > 5000) { // Change LCD page every 5 seconds
+  if (millis() - lastScrollTime > 5000) { // LCD page change every 5 sec
     lastScrollTime = millis();
     lcd.clear();
     displayPage(currentPage);
     currentPage = (currentPage + 1) % totalPages;
   }
 }
-
 // ===== GSM Connect =====
 void connectGSM() {
   Serial.println("Connecting GSM...");
@@ -192,6 +201,32 @@ void sendInverterData() {
     http.end();
   }
 }
+// ===== Critical Alerts Check =====
+void checkCriticalAlerts() {
+  if (inverterStatus == "Fault") {
+    sendCriticalSMS("ALERT: Inverter Fault Detected!");
+  }
+  if (batterySOC < 20) {
+    sendCriticalSMS("ALERT: Battery SOC below 20%");
+  }
+}
+
+// ===== Send Critical SMS =====
+void sendCriticalSMS(String alertText) {
+  if (!modem.isGprsConnected()) { // Check GSM connection
+    Serial.println("GSM not connected, cannot send SMS");
+    return;
+  }
+  SerialAT.println("AT+CMGF=1"); // Set SMS to Text Mode
+  delay(100);
+  SerialAT.println("AT+CMGS=\"+91xxxxxxxxxx\""); // Put your mobile number here
+  delay(100);
+  SerialAT.println(alertText);
+  delay(100);
+  SerialAT.write(26); // ASCII code of CTRL+Z
+  delay(5000);
+  Serial.println("Critical SMS Sent: " + alertText);
+}
 
 // ===== Display Pages on LCD =====
 void displayPage(int page) {
@@ -225,31 +260,4 @@ void displayPage(int page) {
       lcd.setCursor(0, 1); lcd.print("Bat Health: 92%");
       break;
   }
-}
-
-// ===== Critical Alerts Check =====
-void checkCriticalAlerts() {
-  if (inverterStatus == "Fault") {
-    sendCriticalSMS("ALERT: Inverter Fault Detected!");
-  }
-  if (batterySOC < 20) {
-    sendCriticalSMS("ALERT: Battery SOC below 20%");
-  }
-}
-
-// ===== Send Critical SMS =====
-void sendCriticalSMS(String alertText) {
-  if (!modem.isGprsConnected()) { // Check GSM connection
-    Serial.println("GSM not connected, cannot send SMS");
-    return;
-  }
-  SerialAT.println("AT+CMGF=1"); // Text mode
-  delay(100);
-  SerialAT.println("AT+CMGS=\"+91xxxxxxxxxx\""); // Your phone number
-  delay(100);
-  SerialAT.println(alertText);
-  delay(100);
-  SerialAT.write(26); // Ctrl+Z to send
-  delay(5000);
-  Serial.println("Critical SMS Sent: " + alertText);
 }
