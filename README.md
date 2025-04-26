@@ -1,80 +1,103 @@
-# Solar Monitoring System
+# Solar Monitoring System (ESP32 based)
 
-**Developed By:** Bootgrow Solutions LLP  
+This project is a **Solar Monitoring System** built on ESP32 designed for industrial deployment near Solar Inverters.  
+It reads **environmental sensor data** and **solar inverter operational data**, sends it to a **remote API server**, displays it on an **LCD**, and can push **critical SMS alerts** in case of inverter or battery issues.
 
----
-
-## 📋 Project Overview
-
-The Solar Monitoring System is a robust, industrial-grade IoT device designed to monitor key environmental parameters and solar inverter metrics in real time.
-
-It enables efficient operational oversight, remote maintenance through OTA updates, and reliable data transmission over WiFi or 4G LTE networks.
-
----
-
-## 🛠 Features
-
-- **Multi-Sensor Integration:**
-  - Temperature and Humidity (DHT22)
-  - Solar Irradiance (350-1100nm spectrum)
-  - Wind Speed and Direction (Model 6410)
-  - Dust Level Monitoring
-
-- **Inverter Monitoring:**
-  - RS485 Communication over RJ45 Connector
-  - Power Output, Voltage, Current, Battery Status Monitoring
-
-- **Connectivity:**
-  - WiFi First Priority
-  - Automatic 4G LTE Fallback (SIM7600E-H Module)
-
-- **User Interface:**
-  - Real-Time Data Display on LCD (20x4 I2C)
-  - OTA (Over-The-Air) Firmware Update Support
-
-- **Industrial Design:**
-  - Compact, IP65-Grade Enclosure
-  - Minimal Cable Access: Power, Sensors, RJ45 Inverter, SIM Tray
+The system features:
+- **Auto Baud Rate Detection** for inverter RS485 communication.
+- **Flash Memory Save/Load** to avoid repeated detection.
+- **WiFi + GSM fallback** internet connection.
+- **Secure OTA (Over-the-Air) Firmware Update**.
+- **LCD Auto-Scrolling Pages** to show live data.
+- **Critical Fault Detection and SMS Alerts**.
 
 ---
 
-## 🔧 Hardware Requirements
+## 🔥 Available Versions
 
-- ESP32 Development Board
-- SIM7600E-H 4G LTE Module
-- DHT22 Temperature and Humidity Sensor
-- Solar Irradiance Sensor (Analog)
-- Wind Speed and Direction Sensor (Model 6410)
-- Dust Sensor (Analog)
-- Buck Converter (12V/24V to 5V DC)
-- RS485 Transceiver (MAX485 or SP3485)
-- LCD 20x4 I2C Display
-- RJ45 Connector for Inverter Communication
-- SIM Tray Holder for External Access
-- Waterproof IP65 Enclosure
+| Version | Description |
+|:--------|:------------|
+| **Static Version** (`Solar_Monitoring_System_Final_Static/`) | OTA Hostname and Password are **fixed manually** inside the code. |
+| **Dynamic Version** (`Solar_Monitoring_System_Final_Dynamic/`) | OTA Hostname and Password are **generated automatically** based on the ESP32 **chip unique ID** at runtime. |
+
+✅ Both versions fully support Flash Save, Auto Baud, LCD, GSM/WiFi, API Push, and SMS Alerts.
 
 ---
 
-## 📡 API Endpoints Used
+## 📂 Project Folder Structure
 
-- `POST /api/sensors/send-sensor-data`  
-- `POST /api/inverter/send-inverter-data`
-
-**Data format:** JSON over HTTP
+```plaintext
+Solar_Monitoring_System/
+├── Solar_Monitoring_System_Final_Static/
+│    ├── Solar_Monitoring_System_Final_Static.ino
+│    ├── InverterSettings.h
+│    ├── AutoBaudScanner.h
+│    ├── LCDManager.h
+│    ├── RS485Reader.h
+├── Solar_Monitoring_System_Final_Dynamic/
+│    ├── (Similar structure with dynamic OTA setup)
+└── README.md
+```
 
 ---
 
-## 📈 Future Expansion
+## 📦 Arduino Libraries Required
 
-- Integration with cloud dashboards (Grafana, ThingsBoard, Custom Web Portal)
-- Predictive Maintenance using collected environmental data
-- GPS tracking integration for mobile solar units
+You must install these libraries from Arduino IDE Library Manager:
+
+| Library | Purpose |
+|:--------|:--------|
+| TinyGSM | GSM module (SIM800/SIM900/4G) handling |
+| WiFi.h | Native ESP32 WiFi |
+| DHT Sensor Library | Humidity/Temperature Sensor (DHT22) |
+| LiquidCrystal_I2C | LCD Display over I2C |
+| HTTPClient | Sending API requests |
+| ArduinoOTA | Secure OTA updates |
+| Preferences | Flash memory handling |
+| HardwareSerial | Custom RS485 UART handling |
+
+✅ These libraries are free and available directly from Arduino IDE Library Manager.
 
 ---
 
-## 📝 License
+## 🚀 How to Deploy
 
-This project is proprietary to **Bootgrow Solutions LLP** and developed for **Takyon Networks Private Limited**.  
-Unauthorized reproduction, distribution, or deployment is prohibited.
+1. Install ESP32 board in Arduino IDE (if not already).
+2. Install the required libraries listed above.
+3. Open the `.ino` file (Static or Dynamic version).
+4. Update your WiFi credentials, GSM APN, and mobile number for SMS alerts.
+5. Compile and upload firmware to ESP32.
+6. Device will:
+   - Connect to WiFi (fallback to GSM if WiFi fails)
+   - Perform Auto Baud detection if no Flash settings found
+   - Start sending data to API and scrolling LCD
+   - Send Critical SMS on Inverter Fault or Low Battery
+7. Perform OTA firmware updates securely as needed.
+
+---
+
+## 🛠 Future Enhancements (Planned)
+
+- Integrate real-time RS485 Modbus inverter data reading once inverter register map is provided.
+- Add external SD card logging for offline history.
+- Integrate WiFi Captive Portal for field WiFi configuration without flashing.
+
+---
+
+# 📢 Notes
+- For **Static OTA Version**, Hostname and Password are manually set inside firmware.
+- For **Dynamic OTA Version**, Hostname and Password are automatically generated from ESP32 Chip Unique ID.
+
+---
+
+# 🔥 Project Status
+✅ Stable and field deployable (Pilot Ready).  
+✅ Future-proof architecture for easy scale and upgrades.
+
+---
+
+# 📬 Support and Contact
+Developed by **Bootgrow Solutions LLP** for **Takyon Networks Private Limited**.  
+For technical queries or support, please raise issues in the repository or contact the development team directly.
 
 ---
